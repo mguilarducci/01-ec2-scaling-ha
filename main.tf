@@ -17,6 +17,11 @@ data "aws_vpc" "default" {
   default = true
 }
 
+locals {
+    subnets = ["subnet-093ee3482d1898987", "subnet-04ae54f04c378b7dd"]
+}
+
+
 resource "aws_s3_bucket" "bucket" {
   bucket = "01-ec2-scaling-ha"
 
@@ -41,10 +46,18 @@ resource "aws_efs_file_system" "ec2_scaling_ha" {
   }
 }
 
+resource "aws_efs_mount_target" "efs_mt" {
+  depends_on      = [aws_security_group.allow_efs]
+  count = length(local.subnets)
+  file_system_id  = aws_efs_file_system.ec2_scaling_ha.id
+  subnet_id       = local.subnets[count.index]
+  security_groups = [aws_security_group.allow_efs.id]
+}
+
 # iam role para s3
 
 resource "aws_security_group" "allow_ssh" {
-  name        = "allow_ssh"
+  name        = "allow-ssh"
   description = "Allow SSH inbound traffic"
   vpc_id      = data.aws_vpc.default.id
 
@@ -66,7 +79,7 @@ resource "aws_security_group" "allow_ssh" {
   }
 
   tags = {
-    Name          = "allow_ssh",
+    Name          = "allow-ssh",
     Environment   = "Dev",
     CreationDate  = "2022-09-27",
     MyDescription = "Exploring terraform"
@@ -74,7 +87,7 @@ resource "aws_security_group" "allow_ssh" {
 }
 
 resource "aws_security_group" "allow_http" {
-  name        = "allow_http"
+  name        = "allow-http"
   description = "Allow HTTP inbound traffic"
   vpc_id      = data.aws_vpc.default.id
 
@@ -96,7 +109,7 @@ resource "aws_security_group" "allow_http" {
   }
 
   tags = {
-    Name          = "allow_http",
+    Name          = "allow-http",
     Environment   = "Dev",
     CreationDate  = "2022-09-27",
     MyDescription = "Exploring terraform"
@@ -104,24 +117,57 @@ resource "aws_security_group" "allow_http" {
 }
 
 
+resource "aws_security_group" "allow_efs" {
+  name        = "allow-efs"
+  description = "Allow inbound efs traffic from ec2"
+  vpc_id      = data.aws_vpc.default.id
 
-# # subnet-04ae54f04c378b7dd
 
-# resource "aws_instance" "instance-1" {
-#   ami           = "ami-026b57f3c383c2eec"
-#   instance_type = "t2.micro"
+  ingress {
+    description = "EFS to EC2"
 
-#   security_groups = [
-#     aws_security_group.allow_ssh.id,
-#     aws_security_group.allow_http.id,
-#   ]
+    security_groups = [aws_security_group.allow_ssh.id]
+    from_port       = 2049
+    to_port         = 2049
+    protocol        = "tcp"
+  }
 
-#   subnet_id = "subnet-093ee3482d1898987"
+  egress {
+    security_groups = [aws_security_group.allow_ssh.id]
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+  }
 
-#   tags = {
-#     Name          = "01-ec2-scaling-ha-instance-1",
-#     Environment   = "Dev",
-#     CreationDate  = "2022-09-27",
-#     MyDescription = "Exploring terraform"
-#   }
-# }
+  tags = {
+    Name          = "allow-efs",
+    Environment   = "Dev",
+    CreationDate  = "2022-09-27",
+    MyDescription = "Exploring terraform"
+  }
+}
+
+resource "aws_instance" "instances" {
+  depends_on = [aws_efs_file_system.ec2_scaling_ha, aws_efs_mount_target.efs_mt]
+
+  count = length(local.subnets)
+
+  ami           = "ami-026b57f3c383c2eec"
+  instance_type = "t2.micro"
+
+  security_groups = [
+    aws_security_group.allow_ssh.id,
+    aws_security_group.allow_http.id,
+  ]
+
+  subnet_id = local.subnets[count.index]
+
+  user_data = templatefile("user_data.tftpl", { efs_id = aws_efs_file_system.ec2_scaling_ha.id })
+
+  tags = {
+    Name          = "01-ec2-scaling-ha-instance-${count.index}",
+    Environment   = "Dev",
+    CreationDate  = "2022-09-27",
+    MyDescription = "Exploring terraform"
+  }
+}
