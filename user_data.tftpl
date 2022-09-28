@@ -1,9 +1,13 @@
 #!/bin/bash
-sudo yum update -y
-sudo yum install httpd -y
-sudo service httpd start
-sudo chkconfig httpd on
-sudo yum install amazon-efs-utils -y
-sudo mount -t efs -o tls ${efs_id}:/ /var/www/html
-sudo service httpd restart
-sudo echo "<html><h1>TESTE/h1></html>" > /var/www/html/index.html
+sudo su -
+yum update -y
+yum install httpd -y
+service httpd start
+chkconfig httpd on
+yum install amazon-efs-utils -y
+mount -t efs -o tls ${efs_id}:/ /var/www/html
+service httpd restart
+echo "<html><h1>TESTE/h1></html>" > /var/www/html/index.html
+cd /var/www/html
+aws s3 mb s3://${bucket_name}
+aws s3 cp index.html s3://${bucket_name}

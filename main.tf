@@ -18,17 +18,102 @@ data "aws_vpc" "default" {
 }
 
 locals {
-    subnets = ["subnet-093ee3482d1898987", "subnet-04ae54f04c378b7dd"]
+  subnets     = ["subnet-093ee3482d1898987", "subnet-04ae54f04c378b7dd"]
+  today       = "2022-09-28"
+  bucket_name = "01-ec2-scaling-ha"
 }
 
-
 resource "aws_s3_bucket" "bucket" {
-  bucket = "01-ec2-scaling-ha"
+  bucket        = local.bucket_name
+  force_destroy = true
 
   tags = {
     Name          = "01-ec2-scaling-ha",
     Environment   = "Dev",
-    CreationDate  = "2022-09-27",
+    CreationDate  = local.today
+    MyDescription = "Exploring terraform"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "bucket_access" {
+  bucket = aws_s3_bucket.bucket.id
+
+  block_public_acls   = true
+  block_public_policy = true
+  ignore_public_acls  = true
+}
+
+resource "aws_iam_role" "s3_full_access" {
+  name = "MyAmazonS3FullAccess"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      },
+    ]
+  })
+
+  tags = {
+    Name          = "MyAmazonS3FullAccess",
+    Environment   = "Dev",
+    CreationDate  = local.today
+    MyDescription = "Exploring terraform"
+  }
+}
+
+resource "aws_iam_policy" "bucket_policy" {
+  name        = "01-ec2-scaling-ha-bucket-policy"
+  path        = "/"
+  description = "Allow "
+
+  policy = jsonencode({
+    "Version" : "2012-10-17",
+    "Statement" : [
+      {
+        "Sid" : "VisualEditor0",
+        "Effect" : "Allow",
+        "Action" : [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:DeleteObject"
+        ],
+        "Resource" : [
+          "arn:aws:s3:::*/*",
+          "arn:aws:s3:::my-bucket-name"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    Name          = "01-ec2-scaling-ha-bucket-policy",
+    Environment   = "Dev",
+    CreationDate  = local.today
+    MyDescription = "Exploring terraform"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "bucket_policy_attachment" {
+  role       = aws_iam_role.s3_full_access.name
+  policy_arn = aws_iam_policy.bucket_policy.arn
+}
+
+resource "aws_iam_instance_profile" "instance_profile" {
+  name = "01-ec2-scaling-ha-instance-profile"
+  role = aws_iam_role.s3_full_access.name
+
+  tags = {
+    Name          = "01-ec2-scaling-ha-instance-profile",
+    Environment   = "Dev",
+    CreationDate  = local.today
     MyDescription = "Exploring terraform"
   }
 }
@@ -41,20 +126,18 @@ resource "aws_efs_file_system" "ec2_scaling_ha" {
   tags = {
     Name          = "01-ec2-scaling-ha",
     Environment   = "Dev",
-    CreationDate  = "2022-09-27",
+    CreationDate  = local.today
     MyDescription = "Exploring terraform"
   }
 }
 
 resource "aws_efs_mount_target" "efs_mt" {
   depends_on      = [aws_security_group.allow_efs]
-  count = length(local.subnets)
+  count           = length(local.subnets)
   file_system_id  = aws_efs_file_system.ec2_scaling_ha.id
   subnet_id       = local.subnets[count.index]
   security_groups = [aws_security_group.allow_efs.id]
 }
-
-# iam role para s3
 
 resource "aws_security_group" "allow_ssh" {
   name        = "allow-ssh"
@@ -81,7 +164,7 @@ resource "aws_security_group" "allow_ssh" {
   tags = {
     Name          = "allow-ssh",
     Environment   = "Dev",
-    CreationDate  = "2022-09-27",
+    CreationDate  = local.today
     MyDescription = "Exploring terraform"
   }
 }
@@ -111,7 +194,7 @@ resource "aws_security_group" "allow_http" {
   tags = {
     Name          = "allow-http",
     Environment   = "Dev",
-    CreationDate  = "2022-09-27",
+    CreationDate  = local.today
     MyDescription = "Exploring terraform"
   }
 }
@@ -142,7 +225,7 @@ resource "aws_security_group" "allow_efs" {
   tags = {
     Name          = "allow-efs",
     Environment   = "Dev",
-    CreationDate  = "2022-09-27",
+    CreationDate  = local.today
     MyDescription = "Exploring terraform"
   }
 }
@@ -162,12 +245,18 @@ resource "aws_instance" "instances" {
 
   subnet_id = local.subnets[count.index]
 
-  user_data = templatefile("user_data.tftpl", { efs_id = aws_efs_file_system.ec2_scaling_ha.id })
+  user_data = templatefile("user_data.tftpl", {
+    efs_id      = aws_efs_file_system.ec2_scaling_ha.id,
+    bucket_name = local.bucket_name
+  })
+
+  iam_instance_profile = aws_iam_instance_profile.instance_profile.id
 
   tags = {
     Name          = "01-ec2-scaling-ha-instance-${count.index}",
     Environment   = "Dev",
-    CreationDate  = "2022-09-27",
+    CreationDate  = local.today
     MyDescription = "Exploring terraform"
   }
 }
+
