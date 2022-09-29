@@ -9,5 +9,4 @@ mount -t efs -o tls ${efs_id}:/ /var/www/html
 service httpd restart
 echo "<html><h1>TESTE/h1></html>" > /var/www/html/index.html
 cd /var/www/html
-aws s3 mb s3://${bucket_name}
 aws s3 cp index.html s3://${bucket_name}
