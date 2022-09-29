@@ -19,8 +19,9 @@ data "aws_vpc" "default" {
 
 locals {
   subnets     = ["subnet-093ee3482d1898987", "subnet-04ae54f04c378b7dd"]
-  today       = "2022-09-28"
-  bucket_name = "01-ec2-scaling-ha"
+  today       = "2022-09-29"
+  name = "01-ec2-scaling-ha"
+  bucket_name = local.name
 }
 
 resource "aws_s3_bucket" "bucket" {
@@ -28,7 +29,7 @@ resource "aws_s3_bucket" "bucket" {
   force_destroy = true
 
   tags = {
-    Name          = "01-ec2-scaling-ha",
+    Name          = local.name,
     Environment   = "Dev",
     CreationDate  = local.today
     MyDescription = "Exploring terraform"
@@ -44,7 +45,7 @@ resource "aws_s3_bucket_public_access_block" "bucket_access" {
 }
 
 resource "aws_iam_role" "s3_full_access" {
-  name = "MyAmazonS3FullAccess"
+  name = "${local.name}-MyAmazonS3FullAccess"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -61,7 +62,7 @@ resource "aws_iam_role" "s3_full_access" {
   })
 
   tags = {
-    Name          = "MyAmazonS3FullAccess",
+    Name          = "${local.name}-MyAmazonS3FullAccess",
     Environment   = "Dev",
     CreationDate  = local.today
     MyDescription = "Exploring terraform"
@@ -69,7 +70,7 @@ resource "aws_iam_role" "s3_full_access" {
 }
 
 resource "aws_iam_policy" "bucket_policy" {
-  name        = "01-ec2-scaling-ha-bucket-policy"
+  name        = "${local.name}-bucket-policy"
   path        = "/"
   description = "Allow "
 
@@ -94,7 +95,7 @@ resource "aws_iam_policy" "bucket_policy" {
   })
 
   tags = {
-    Name          = "01-ec2-scaling-ha-bucket-policy",
+    Name          = "${local.name}-bucket-policy",
     Environment   = "Dev",
     CreationDate  = local.today
     MyDescription = "Exploring terraform"
@@ -107,11 +108,11 @@ resource "aws_iam_role_policy_attachment" "bucket_policy_attachment" {
 }
 
 resource "aws_iam_instance_profile" "instance_profile" {
-  name = "01-ec2-scaling-ha-instance-profile"
+  name = "${local.name}-instance-profile"
   role = aws_iam_role.s3_full_access.name
 
   tags = {
-    Name          = "01-ec2-scaling-ha-instance-profile",
+    Name          = "${local.name}-instance-profile",
     Environment   = "Dev",
     CreationDate  = local.today
     MyDescription = "Exploring terraform"
@@ -120,11 +121,11 @@ resource "aws_iam_instance_profile" "instance_profile" {
 
 
 resource "aws_efs_file_system" "ec2_scaling_ha" {
-  creation_token = "01-ec2-scaling-ha"
+  creation_token = local.name
   encrypted      = true
 
   tags = {
-    Name          = "01-ec2-scaling-ha",
+    Name          = local.name,
     Environment   = "Dev",
     CreationDate  = local.today
     MyDescription = "Exploring terraform"
@@ -253,10 +254,9 @@ resource "aws_instance" "instances" {
   iam_instance_profile = aws_iam_instance_profile.instance_profile.id
 
   tags = {
-    Name          = "01-ec2-scaling-ha-instance-${count.index}",
+    Name          = "${local.name}-instance-${count.index}",
     Environment   = "Dev",
     CreationDate  = local.today
     MyDescription = "Exploring terraform"
   }
 }
-
