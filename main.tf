@@ -309,3 +309,9 @@ resource "aws_lb_listener" "alb_listener" {
     target_group_arn = aws_lb_target_group.target_group.arn
   }
 }
+
+
+resource "aws_ami_from_instance" "ami" {
+  name               = local.name
+  source_instance_id = aws_instance.instances[0].id
+}
