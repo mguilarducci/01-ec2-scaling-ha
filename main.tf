@@ -314,4 +314,17 @@ resource "aws_lb_listener" "alb_listener" {
 resource "aws_ami_from_instance" "ami" {
   name               = local.name
   source_instance_id = aws_instance.instances[0].id
+
+  tags = {
+    Name          = local.name,
+    Environment   = "Dev",
+    CreationDate  = local.today
+    MyDescription = "Exploring terraform"
+  }
+}
+
+resource "aws_launch_configuration" "as_conf" {
+  name          = local.name
+  image_id      = aws_ami_from_instance.ami.id
+  instance_type = "t2.micro"
 }
